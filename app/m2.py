@@ -34,6 +34,21 @@ def fmt_qty(line, decimal_units):
     return str(int(round(q)))
 
 
+def _to_iso(s):
+    m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$", str(s or "").strip())
+    if not m:
+        return s
+    y = m.group(3) if len(m.group(3)) == 4 else "20" + m.group(3)
+    return f"{y}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+
+
+def _date_out(iso, st):
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", str(iso or ""))
+    if m and st.get("m2_date_format") == "dmy2":
+        return f"{m.group(3)}/{m.group(2)}/{m.group(1)[2:]}"
+    return iso
+
+
 def parse(text):
     """Parse M2 text into {'header':{codes}, 'invoices':[{...,'lines':[...]}], 'unknown':n}."""
     rows = list(csv.reader(io.StringIO(text)))
@@ -46,7 +61,7 @@ def parse(text):
         t = r[0]
         r = r + [""] * (18 - len(r))
         if t == "IH":
-            cur = {"number": r[1], "date": r[2], "currency": r[8], "incoterm": r[10], "total": r[9], "lines": []}
+            cur = {"number": r[1], "date": _to_iso(r[2]), "currency": r[8], "incoterm": r[10], "total": r[9], "lines": []}
             header = {"regime_code": r[3], "declaration_code": r[4], "shipper": r[5], "payment_code": r[6]}
             invoices.append(cur); last = None
         elif t == "ID" and cur is not None:
@@ -73,7 +88,7 @@ def write_invoice(inv, hdr, st, start_no=1):
     use12 = st.get("m2_code_field") == "hs12"
     total = sum(num(l.get("value")) for l in inv["lines"])
     out = []
-    out.append([ "IH", inv["number"], inv["date"], hdr["regime_code"], hdr["declaration_code"], hdr["shipper"],
+    out.append([ "IH", inv["number"], _date_out(inv["date"], st), hdr["regime_code"], hdr["declaration_code"], hdr["shipper"],
                  hdr["payment_code"], "", inv.get("currency") or hdr.get("currency", ""), f"{total:.3f}",
                  inv.get("incoterm") or hdr.get("incoterm", ""), "", "", "", ""])
     n = start_no

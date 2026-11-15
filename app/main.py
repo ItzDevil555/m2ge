@@ -13,6 +13,7 @@ app = FastAPI(title="M2Gen Pro", version="2.0")
 @app.on_event("startup")
 def _startup():
     db.init()
+    db.ensure_taxonomy()
     if hsm.stats()["rows"] == 0:
         p = os.path.join(BASE, "data", "Hs_Code_Dhabi_12_Digit.xlsx")
         if os.path.exists(p):
@@ -140,16 +141,18 @@ async def add_code(req: Request):
     with db._lock, db.conn() as c:
         if b.get("id"):
             c.execute("UPDATE code_tables SET code=?, label=?, active=? WHERE id=?", (b.get("code", ""), b["label"], int(b.get("active", 1)), b["id"]))
+            if "parent" in b:
+                c.execute("UPDATE code_tables SET parent=? WHERE id=?", (b["parent"] or None, b["id"]))
         else:
-            c.execute("INSERT INTO code_tables(kind,code,label) VALUES(?,?,?)", (b["kind"], b.get("code", ""), b["label"]))
+            c.execute("INSERT INTO code_tables(kind,code,label,parent) VALUES(?,?,?,?)", (b["kind"], b.get("code", ""), b["label"], b.get("parent") or None))
     return {"ok": True}
 
 
 @app.get("/api/codes/export")
 def export_codes():
     with db.conn() as c:
-        rows = c.execute("SELECT kind,code,label FROM code_tables ORDER BY kind,id").fetchall()
-    body = "kind,code,label\r\n" + "".join(f'{r["kind"]},{r["code"]},"{r["label"]}"\r\n' for r in rows)
+        rows = c.execute("SELECT t.kind,t.code,t.label,p.label AS regime FROM code_tables t LEFT JOIN code_tables p ON p.id=t.parent WHERE t.active=1 ORDER BY t.kind,t.id").fetchall()
+    body = "kind,code,label,regime\r\n" + "".join(f'{r["kind"]},{r["code"]},"{r["label"]}",{r["regime"] or ""}\r\n' for r in rows)
     return Response(body, media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="code_tables.csv"'})
 
 
@@ -163,12 +166,16 @@ async def bulk_codes(req: Request):
         for r in _csv.reader(io.StringIO(text)):
             if len(r) < 3 or r[0].strip().lower() == "kind":
                 continue
-            k, code, label = r[0].strip(), r[1].strip(), ",".join(r[2:]).strip()
+            k, code, label = r[0].strip(), r[1].strip(), r[2].strip()
+            par = None
+            if k == "declaration" and len(r) > 3 and r[3].strip():
+                pr = c.execute("SELECT id FROM code_tables WHERE kind='regime' AND lower(label)=lower(?)", (r[3].strip(),)).fetchone()
+                par = pr["id"] if pr else None
             row = c.execute("SELECT id FROM code_tables WHERE kind=? AND lower(label)=lower(?)", (k, label)).fetchone()
             if row:
-                c.execute("UPDATE code_tables SET code=?, active=1 WHERE id=?", (code, row["id"])); n_up += 1
+                c.execute("UPDATE code_tables SET code=?, active=1, parent=COALESCE(?,parent) WHERE id=?", (code, par, row["id"])); n_up += 1
             else:
-                c.execute("INSERT INTO code_tables(kind,code,label) VALUES(?,?,?)", (k, code, label)); n_new += 1
+                c.execute("INSERT INTO code_tables(kind,code,label,parent) VALUES(?,?,?,?)", (k, code, label, par)); n_new += 1
     db.audit(None, "codes_bulk", f"{n_up} updated, {n_new} added")
     return {"updated": n_up, "added": n_new}
 
@@ -347,6 +354,7 @@ async def import_m2(files: list[UploadFile] = File(...)):
                 cur = c.execute("INSERT INTO code_tables(kind,code,label) VALUES(?,?,?)", (kind, code, f"{kind.title()} {code} (imported)"))
                 ids[kind + "_id"] = cur.lastrowid
             elif r:
+                c.execute("UPDATE code_tables SET active=1 WHERE id=?", (r["id"],))
                 ids[kind + "_id"] = r["id"]
         if header.get("shipper"):
             c.execute("INSERT OR IGNORE INTO parties(name,kind) VALUES(?, 'shipper')", (header["shipper"],))
@@ -535,7 +543,7 @@ async def diff(did: str, file: UploadFile = File(...)):
 @app.get("/api/dashboard")
 def dashboard():
     days = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
-    per = Counter(); ship = Counter(); chap = Counter(); st = Counter(); lines = 0; val = 0.0; err = 0; n = 0
+    per = Counter(); ship = Counter(); ctry = Counter(); wchap = Counter(); chap = Counter(); st = Counter(); lines = 0; val = 0.0; err = 0; n = 0
     with db.conn() as c:
         for r in c.execute("SELECT * FROM declarations WHERE deleted=0"):
             d = json.loads(r["data"]); m = d.get("_meta", {}); n += 1
@@ -545,11 +553,12 @@ def dashboard():
             err += 1 if m.get("errors") else 0
             for inv in d["invoices"]:
                 for l in inv["lines"]:
-                    chap[(l.get("hs8") or hsm.digits(l.get("hs_inv")))[:2] or "??"] += 1
+                    ch = (l.get("hs8") or hsm.digits(l.get("hs_inv")))[:2] or "??"
+                    chap[ch] += 1; wchap[ch] += float(l.get("weight") or 0); ctry[(l.get("country") or "??").upper()] += float(l.get("value") or 0)
         gen = c.execute("SELECT COUNT(*) FROM generated").fetchone()[0]
     return {"declarations": n, "lines": lines, "value": round(val, 2), "generated": gen, "with_errors": err,
             "error_rate": round(100 * err / n, 1) if n else 0, "per_day": [{"d": d[5:], "n": per.get(d, 0)} for d in days],
-            "top_shippers": ship.most_common(6), "top_chapters": chap.most_common(8), "status": dict(st)}
+            "top_shippers": ship.most_common(6), "top_chapters": chap.most_common(8), "value_by_country": [[k, round(v, 2)] for k, v in ctry.most_common(7)], "weight_by_chapter": [[k, round(v, 2)] for k, v in wchap.most_common(8)], "status": dict(st)}
 
 
 @app.get("/api/audit")

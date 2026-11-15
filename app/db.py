@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS generated(id INTEGER PRIMARY KEY AUTOINCREMENT, decl_
 
 DEFAULT_SETTINGS = {
     "m2_code_field": "hs8",          # what goes in ID field 3: hs8 | hs12
+    "m2_date_format": "iso",        # iso = YYYY-MM-DD | dmy2 = dd/mm/yy
     "line_numbering": "per_invoice",  # per_invoice | continuous
     "decimal_units": "kg",            # units whose qty is written with 4 decimals
     "max_lines_per_file": "0",        # 0 = no split
@@ -50,10 +51,24 @@ INCOTERMS = [("EXW", "EXW (Ex Works)"), ("FCA", "FCA (Free Carrier)"), ("CPT", "
              ("FAS", "FAS (Free Alongside Ship)"), ("FOB", "FOB (Free On Board)"),
              ("CFR", "CFR (Cost and Freight)"), ("CIF", "CIF (Cost, Insurance and Freight)")]
 EXTRA_LABELS = {
-    "regime": ["Import", "Export", "Re-export", "Transit", "Transshipment", "Temporary admission", "Warehousing", "Free zone import", "Free zone export", "GCC transit"],
-    "declaration": ["Import", "Export", "Transit", "FZ Transit Out", "FZ Transit In", "Re-export", "Courier"],
     "payment": ["Bank Transfer", "Cash", "Cheque", "Credit", "Letter of Credit", "Advance Payment", "Open Account", "Free of Charge"],
     "invoice_type": ["Commercial", "Proforma", "Sample", "Return", "Gift", "Free of Charge"],
+}
+# Taken from the customs portal screenshots: regime -> declaration types.
+REGIMES = ["Import", "Export", "Transit", "Temporary Admission", "Transfer"]
+DECLARATIONS = {
+    "Import": ["Import to Local from ROW", "Import to Local from GCC (Statistical Import)", "Import to CW from ROW", "Import to Local from FZ",
+               "Import to Local from CW", "Import to CW from FZ", "Import for Re Export to Local from ROW", "Import for Re Export to Local from FZ",
+               "Import for Re Export to Local from CW", "Import to Local After Temporary Admission", "Import to CW from Local (After Temporary Admission)",
+               "Goods Consumption within FZ"],
+    "Export": ["Export from Local to ROW", "Export from Local to GCC (Statistical Export)", "Export from CW to ROW", "Export from Local to FZ",
+               "Export from CW to FZ", "Re Export to ROW (after Import for Re Export)", "Re Export to FZ (after Import for Re Export)",
+               "Return to ROW after Temporary Admission", "Return to FZ after Temporary Admission", "Temporary Export from Local to ROW",
+               "Temporary Export from Local to FZ"],
+    "Transit": ["FZ Transit In", "FZ Transit In from GCC and other Emirates FZ and GCC Local Market", "FZ Transit Out",
+                "FZ Transit between Dubai based FZ", "Transit (ROW to ROW)"],
+    "Temporary Admission": ["Temporary Admission from ROW to Local", "Temporary Admission from FZ to Local", "Temporary Admission from CW to Local"],
+    "Transfer": ["Transfer of Cargo by Dubai based CW", "Transfer within a FZ"],
 }
 CURRENCIES = ["USD", "EUR", "AED", "GBP", "CNY", "INR", "JPY", "SAR", "CHF", "KRW", "SGD", "HKD", "TRY", "CAD", "AUD"]
 
@@ -67,13 +82,12 @@ def init():
         c.executescript(SCHEMA)
         for k, v in DEFAULT_SETTINGS.items():
             c.execute("INSERT OR IGNORE INTO settings VALUES(?,?)", (k, v))
+        if "parent" not in [r[1] for r in c.execute("PRAGMA table_info(code_tables)")]:
+            c.execute("ALTER TABLE code_tables ADD COLUMN parent INTEGER")
         if c.execute("SELECT COUNT(*) FROM code_tables").fetchone()[0] == 0:
             seed = []
             # Codes below come from the sample M2 file. Labels from the UI screenshots have NO code yet:
             # set them in Settings > Code tables (blank code blocks generation until filled).
-            seed += [("regime", "10", "Regime 10 (from sample file)")]
-            seed += [("declaration", "1", "Declaration type 1 (from sample file)")]
-            seed += [("payment", "7", "Payment type 7 (from sample file)")]
             for k, labels in EXTRA_LABELS.items():
                 seed += [(k, "", l) for l in labels]
             seed += [("incoterm", a, b) for a, b in INCOTERMS]
@@ -95,3 +109,21 @@ def setting(key=None):
 def audit(decl_id, action, detail=""):
     with _lock, conn() as c:
         c.execute("INSERT INTO audit(ts,decl_id,action,detail) VALUES(?,?,?,?)", (now(), decl_id, action, detail))
+
+
+def ensure_taxonomy():
+    """Make regime / declaration-type lists match the portal. Old entries are hidden, never deleted."""
+    with _lock, conn() as c:
+        def find(kind, label):
+            return c.execute("SELECT id FROM code_tables WHERE kind=? AND lower(label)=lower(?)", (kind, label)).fetchone()
+        keep = set()
+        for reg in REGIMES:
+            r = find("regime", reg)
+            rid = r["id"] if r else c.execute("INSERT INTO code_tables(kind,code,label) VALUES('regime','',?)", (reg,)).lastrowid
+            c.execute("UPDATE code_tables SET active=1 WHERE id=?", (rid,)); keep.add(rid)
+            for dec in DECLARATIONS[reg]:
+                d = find("declaration", dec)
+                did = d["id"] if d else c.execute("INSERT INTO code_tables(kind,code,label,parent) VALUES('declaration','',?,?)", (dec, rid)).lastrowid
+                c.execute("UPDATE code_tables SET active=1, parent=? WHERE id=?", (rid, did)); keep.add(did)
+        marks = ",".join("?" * len(keep))
+        c.execute(f"UPDATE code_tables SET active=0 WHERE kind IN ('regime','declaration') AND id NOT IN ({marks}) AND label NOT LIKE '%(imported)%'", tuple(keep))

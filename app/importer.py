@@ -189,7 +189,7 @@ def invoice_info(rows, hi):
                         info[k] = v
     if info["invoice_date"]:
         try:
-            info["invoice_date"] = pd.to_datetime(info["invoice_date"], dayfirst=False).strftime("%Y-%m-%d")
+            info["invoice_date"] = pd.to_datetime(info["invoice_date"], dayfirst=True).strftime("%Y-%m-%d")
         except Exception:
             pass
     m = re.search(r"\b(EXW|FCA|CPT|CIP|DAP|DPU|DDP|FAS|FOB|CFR|CIF)\b", info["incoterm"].upper())

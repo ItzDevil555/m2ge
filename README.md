@@ -17,6 +17,10 @@ Settings → Code tables: the sample file proves regime `10`, declaration type `
 Labels from your screenshots (Transit, FZ Transit Out, Bank Transfer, Commercial…) are seeded **with blank codes**; fill in the real
 codes. Entries with blank codes block generation.
 
+## Regime and declaration types
+Regimes: Import, Export, Transit, Temporary Admission, Transfer. Each has its own declaration types (33 total), taken from the portal screenshots. Choosing a regime filters the declaration list. Numeric codes are blank until you fill them in Settings > Code tables (or bulk import `declaration,code,label,regime`).
+Dates show as dd/mm/yy in the UI and reports. The M2 file keeps the sample format YYYY-MM-DD (verified by the golden test).
+
 ## Known open points
 * `PD` records (`"PD","","23","N"`) are preserved exactly on M2 import, but their meaning is undocumented, so they are NOT invented for Excel imports.
 * ID field 3 = 8-digit tariff code (matches 219/220 lines of the sample against the master). Switch to the 12-digit code in Settings → M2 writer profile.

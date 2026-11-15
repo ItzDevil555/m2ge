@@ -6,6 +6,11 @@ from openpyxl.utils import get_column_letter
 from . import hs as hsm, db
 
 
+def dmy(s):
+    s = str(s or "")
+    return f"{s[8:10]}/{s[5:7]}/{s[2:4]}" if len(s) >= 10 and s[4] == "-" else s
+
+
 def _hdr(ws, row, cols):
     fill = PatternFill("solid", fgColor="1F3A5F")
     for i, c in enumerate(cols, 1):
@@ -34,7 +39,7 @@ def to_xlsx(decl, issues, labels):
     r = 2
     for inv in decl["invoices"]:
         for i, l in enumerate(inv["lines"], 1):
-            vals = [inv["number"], inv["date"], i, l.get("hs8", ""), l.get("hs12", ""), l.get("hs_inv", ""), l.get("description", ""),
+            vals = [inv["number"], dmy(inv["date"]), i, l.get("hs8", ""), l.get("hs12", ""), l.get("hs_inv", ""), l.get("description", ""),
                     l.get("unit", ""), l["qty"], l["weight"], l["value"], inv.get("currency") or h.get("currency"), l.get("country", ""), l.get("hs_status", "")]
             for c, v in enumerate(vals, 1):
                 cell = ws2.cell(row=r, column=c, value=v)
@@ -92,7 +97,7 @@ def report_html(decl, issues, labels, company):
                         f"<td>{e(l.get('description',''))}<div class=s>{e(en)}</div><div class='s ar' dir=rtl>{e(ar)}</div></td>"
                         f"<td>{e(l.get('unit',''))}</td><td class=r>{l['qty']:,.4g}</td><td class=r>{l['weight']:,.4f}</td>"
                         f"<td class=r>{l['value']:,.3f}</td><td>{e(l.get('country',''))}</td><td class=r>{duty:g}%</td></tr>")
-        body.append(f"<h3>Invoice {e(inv['number'])} <span>{e(inv['date'])} · {e(inv.get('currency') or h.get('currency',''))} · {e(inv.get('incoterm') or h.get('incoterm',''))}</span></h3>"
+        body.append(f"<h3>Invoice {e(inv['number'])} <span>{e(dmy(inv['date']))} · {e(inv.get('currency') or h.get('currency',''))} · {e(inv.get('incoterm') or h.get('incoterm',''))}</span></h3>"
                     "<table><thead><tr><th>#</th><th>Master HS</th><th>Invoice HS</th><th>Description / الوصف</th><th>Unit</th><th>Qty</th><th>Net wt</th><th>Value</th><th>Origin</th><th>Duty</th></tr></thead><tbody>"
                     + "".join(rows) + "</tbody></table>")
     notes = "".join(f"<li class={e(i['level'])}>{e(i['msg'])}</li>" for i in issues if i["level"] != "info") or "<li>No validation issues.</li>"

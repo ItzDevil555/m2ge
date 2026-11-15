@@ -16,7 +16,7 @@ const autosave = debounce(() => saveNow(true), 1500);
 const revalidate = debounce(async () => {
   try { const r = await api('/validate', { json: { decl: D.decl } }); D.issues = r.issues; paintMeta(); paintRows(); } catch (e) { }
 }, 350);
-function afterChange(rebuild) { D.dirty = true; setState('Unsaved changes…'); autosave(); revalidate(); if (rebuild) renderBody(); paintMeta(); }
+function afterChange(rebuild) { D.dirty = true; setState('Unsaved changes…'); autosave(); revalidate(); if (rebuild) renderBody(); paintMeta(); if (D.tab === 'split' && window.refreshSplit) refreshSplit(); }
 function mut(fn, rebuild = false) { snapshot(); fn(D.decl); afterChange(rebuild); }
 
 async function saveNow(quiet) {
@@ -76,9 +76,11 @@ function renderToolbar() {
 }
 
 function sel(kind, key, req) {
-  const cur = D.decl.header[key]; const bad = req && !cur;
-  const s = h('select', { class: bad ? 'bad' : '', onchange: e => mut(d => d.header[key] = e.target.value ? +e.target.value : null) },
-    h('option', { value: '' }, 'Select…'), codesOf(kind).map(c => h('option', { value: c.id, selected: c.id == cur }, c.label + (c.code === '' ? '  — (no code set)' : ''))));
+  const cur = D.decl.header[key]; const bad = req && !cur; const reg = D.decl.header.regime_id;
+  let opts = codesOf(kind);
+  if (kind === 'declaration') opts = opts.filter(c => c.parent ? c.parent == reg : c.id == cur);
+  const s = h('select', { class: bad ? 'bad' : '', disabled: kind === 'declaration' && !reg, onchange: e => mut(d => { d.header[key] = e.target.value ? +e.target.value : null; if (key === 'regime_id') { const dc = M.codes.find(c => c.id == d.header.declaration_id); if (dc && dc.parent && dc.parent != d.header.regime_id) d.header.declaration_id = null; } }, key === 'regime_id') },
+    h('option', { value: '' }, kind === 'declaration' && !reg ? 'Select regime type first' : 'Select…'), opts.map(c => h('option', { value: c.id, selected: c.id == cur }, c.label + (c.code === '' ? '  — (no code set)' : ''))));
   return s;
 }
 function field(label, el, cls = 'c4', req) { return h('label', { class: 'f ' + cls }, h('span', { class: req ? 'req' : '' }, label), el); }
@@ -107,7 +109,7 @@ function renderHeader() {
 function renderTabs() {
   const n = D.decl.invoices.length, hsn = new Set(flatLines().map(x => x.l.hs8 || x.l.hs_inv)).size;
   const t = (k, label, badge) => h('a', { class: D.tab === k ? 'on' : '', onclick: () => setTab(k) }, label, badge != null ? h('span', { class: 'badge' }, badge) : null);
-  $('#tabs').replaceWith(h('div', { id: 'tabs', class: 'tabs' }, t('declaration', '📥 Import'), t('invoices', '🧾 Invoices', n), t('lines', '✏️ Lines', totals().n), t('hs', '🔢 HS Codes', hsn), t('preview', '👁 M2 Preview')));
+  $('#tabs').replaceWith(h('div', { id: 'tabs', class: 'tabs' }, t('declaration', '📥 Import'), t('invoices', '🧾 Invoices', n), t('lines', '✏️ Lines', totals().n), t('hs', '🔢 HS Codes', hsn), t('split', '⇄ Side by side'), t('preview', '👁 M2 Preview')));
 }
 function setTab(t) { D.tab = t; D.hdrOpen = t === 'declaration'; renderTabs(); renderBody(); }
 
@@ -139,7 +141,7 @@ function renderBody() {
   const t = D.tab;
   b.append(issueBar());
   if (t === 'declaration') b.append(importPanel()); else if (t === 'invoices') b.append(invoicesTab()); else if (t === 'lines') b.append(linesTab());
-  else if (t === 'hs') b.append(hsTab()); else if (t === 'preview') b.append(previewTab());
+  else if (t === 'hs') b.append(hsTab()); else if (t === 'preview') b.append(previewTab()); else if (t === 'split') b.append(splitTab());
   $('#body').replaceWith(b); renderHeader(); paintMeta(); paintRows();
 }
 
@@ -227,7 +229,7 @@ function invoicesTab() {
   const rows = D.decl.invoices.map((inv, ii) => {
     const t = inv.lines.reduce((a, l) => ({ q: a.q + +l.qty, w: a.w + +l.weight, v: a.v + +l.value }), { q: 0, w: 0, v: 0 });
     const f = (k, type = 'text', w) => h('input', { type, value: inv[k] ?? '', style: w, onchange: e => mut(d => d.invoices[ii][k] = e.target.value) });
-    return h('tr', {}, h('td', {}, h('input', { type: 'checkbox', style: 'width:auto', onchange: e => e.target.checked ? sel.add(ii) : sel.delete(ii) })), h('td', {}, f('number')), h('td', {}, f('date', 'date')), h('td', {}, f('currency', 'text', 'width:70px')), h('td', {}, f('incoterm', 'text', 'width:70px')),
+    return h('tr', {}, h('td', {}, h('input', { type: 'checkbox', style: 'width:auto', onchange: e => e.target.checked ? sel.add(ii) : sel.delete(ii) })), h('td', {}, f('number')), h('td', {}, h('input', { value: fmtDate(inv.date), placeholder: 'dd/mm/yy', style: 'width:92px', onchange: e => { const v = parseDate(e.target.value); if (v === null) { e.target.classList.add('bad'); return toast('Date must be dd/mm/yy', 'err'); } e.target.classList.remove('bad'); e.target.value = fmtDate(v); mut(d => d.invoices[ii].date = v); } })), h('td', {}, f('currency', 'text', 'width:70px')), h('td', {}, f('incoterm', 'text', 'width:70px')),
       h('td', { class: 'num' }, inv.lines.length), h('td', { class: 'num' }, fmt(t.q, 2)), h('td', { class: 'num' }, fmt(t.w, 4)), h('td', { class: 'num' }, fmt(t.v, 3)),
       h('td', {}, h('button', { class: 'btn sm', onclick: () => { D.inv = String(ii); setTab('lines'); } }, 'Open lines')));
   });
@@ -256,18 +258,18 @@ function linesTab() {
     h('input', { style: 'width:220px', placeholder: 'Filter lines…', value: D.q, oninput: debounce(e => { D.q = e.target.value; D.page = 0; renderBody(); const i = $('#body input[placeholder^="Filter"]'); if (i) { i.focus(); i.setSelectionRange(99, 99); } }, 300) }),
     h('label', { class: 'row' }, h('input', { type: 'checkbox', style: 'width:auto', checked: D.onlyIssues, onchange: e => { D.onlyIssues = e.target.checked; D.page = 0; renderBody(); } }), 'Issues only'),
     h('span', { class: 'right row' },
-      h('button', { class: 'btn sm', onclick: () => bulkModal('country') }, 'Set country'), h('button', { class: 'btn sm', onclick: () => bulkModal('unit') }, 'Set unit'), h('button', { class: 'btn sm', onclick: () => bulkModal('hs') }, 'Apply HS to selected'),
+      savedFiltersUI(), h('button', { class: 'btn sm pri', onclick: bulkEditModal }, I('wand', 14), ' Bulk edit'), h('button', { class: 'btn sm', onclick: () => bulkModal('country') }, 'Set country'), h('button', { class: 'btn sm', onclick: () => bulkModal('unit') }, 'Set unit'), h('button', { class: 'btn sm', onclick: () => bulkModal('hs') }, 'Apply HS to selected'),
       h('button', { class: 'btn sm', onclick: () => { const t = vis[0]; mut(d => d.invoices[t ? t.ii : 0].lines.push(newLine()), true); } }, '＋ Line'),
       h('button', { class: 'btn sm danger', onclick: () => { if (!D.sel.size) return toast('Select lines first'); mut(d => d.invoices.forEach((inv, ii) => inv.lines = inv.lines.filter((_, li) => !D.sel.has(ii + ':' + li))), true); D.sel.clear(); renderBody(); } }, 'Delete selected')));
-  const cols = ['', '#', 'Inv', 'Master HS', 'Invoice HS', 'Description', 'Unit', 'Qty', 'Net weight', 'Value', 'Origin'];
+  const cols = ['', h('input', { type: 'checkbox', style: 'width:auto', title: 'Select page', onchange: e => selectPage(e.target.checked) }), '#', 'Inv', 'Master HS', 'Invoice HS', 'Description', 'Unit', 'Qty', 'Net weight', 'Value', 'Origin'];
   const cell = (x, k, cls = '', extra = {}) => h('td', { class: cls }, h('input', {
     value: x.l[k] ?? '', 'data-col': k, ...extra,
     onchange: e => { let v = e.target.value; if (['qty', 'weight', 'value'].includes(k)) { v = parseFloat(String(v).replace(/,/g, '')) || 0; e.target.value = v; } if (k === 'country') { v = v.toUpperCase(); e.target.value = v; } mut(d => { d.invoices[x.ii].lines[x.li][k] = v; if (k === 'hs_inv') { d.invoices[x.ii].lines[x.li].hs_status = 'missing'; d.invoices[x.ii].lines[x.li].hs8 = ''; } }); },
-    onkeydown: e => { if (e.key === 'Enter') { const tr = e.target.closest('tr').nextElementSibling; if (tr) { const n = $(`input[data-col="${k}"]`, tr); if (n) { e.preventDefault(); n.focus(); n.select(); } } } }
+    onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { const tr = e.target.closest('tr').nextElementSibling; if (tr) { const n = $(`input[data-col="${k}"]`, tr); if (n) { e.preventDefault(); n.focus(); n.select(); } } } }
   }));
   const rows = slice.map((x, n) => {
     const key = x.ii + ':' + x.li;
-    return h('tr', { 'data-k': key }, h('td', {}, h('input', { type: 'checkbox', style: 'width:auto', checked: D.sel.has(key), onchange: e => e.target.checked ? D.sel.add(key) : D.sel.delete(key) })),
+    return h('tr', { 'data-k': key }, h('td', { class: 'drag', title: 'Drag to reorder (Alt+Up/Down)' }, I('grip', 14)), h('td', {}, h('input', { type: 'checkbox', style: 'width:auto', checked: D.sel.has(key), onchange: e => e.target.checked ? D.sel.add(key) : D.sel.delete(key) })),
       h('td', { class: 'mut' }, x.li + 1), h('td', { class: 'mut', title: x.inv.number }, D.decl.invoices.length > 1 ? '#' + (x.ii + 1) : ''),
       h('td', { 'data-hs': key }, hsChip(x)), cell(x, 'hs_inv', 'mono'), cell(x, 'description', '', { style: 'min-width:220px' }), cell(x, 'unit', '', { style: 'width:52px' }), cell(x, 'qty', 'num', { style: 'width:80px' }), cell(x, 'weight', 'num', { style: 'width:90px' }), cell(x, 'value', 'num', { style: 'width:100px' }), cell(x, 'country', '', { style: 'width:50px' }));
   });
@@ -379,7 +381,7 @@ async function genFiles(force) {
 }
 async function historyModal() {
   const rows = await api(`/declarations/${D.decl.id}/history`);
-  modal({ title: 'Generated files', body: rows.length ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['When', 'File', 'Lines', 'SHA-256', ''].map(x => h('th', {}, x)))), h('tbody', {}, rows.map(r => h('tr', {}, h('td', {}, r.ts.replace('T', ' ')), h('td', {}, r.filename), h('td', {}, r.lines), h('td', { class: 'mono', title: r.sha256 }, r.sha256.slice(0, 12) + '…'), h('td', {}, h('a', { class: 'btn sm', href: '/api/generated/' + r.id }, '⬇')))))) : h('p', {}, 'Nothing generated yet.') });
+  modal({ title: 'Generated files', body: rows.length ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['When', 'File', 'Lines', 'SHA-256', ''].map(x => h('th', {}, x)))), h('tbody', {}, rows.map(r => h('tr', {}, h('td', {}, fmtTs(r.ts)), h('td', {}, r.filename), h('td', {}, r.lines), h('td', { class: 'mono', title: r.sha256 }, r.sha256.slice(0, 12) + '…'), h('td', {}, h('a', { class: 'btn sm', href: '/api/generated/' + r.id }, '⬇')))))) : h('p', {}, 'Nothing generated yet.') });
 }
 function partiesModal() {
   const name = h('input', { placeholder: 'Company name' });

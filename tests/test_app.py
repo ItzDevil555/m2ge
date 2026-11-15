@@ -64,3 +64,13 @@ def test_excel_import_and_process():
         p = c.post("/api/process", json={"decl": d}).json()
         assert all(l["hs_status"] in ("ok", "ambiguous", "missing") for l in p["decl"]["invoices"][0]["lines"])
         assert any(i["level"] == "error" for i in p["issues"])  # codes not selected → generation blocked
+
+
+def test_m2_date_format_setting():
+    from app import m2
+    text = open(os.path.join(os.path.dirname(__file__), "fixtures", "HELLMAN-LOGISTICS.txt"), encoding="utf-8").read()
+    inv = m2.parse(text)["invoices"][0]
+    hdr = {"regime_code": "10", "declaration_code": "1", "shipper": "X", "payment_code": "7"}
+    assert m2.write_invoice(inv, hdr, {"m2_date_format": "dmy2"})[0][0][2] == "01/01/26"
+    assert m2.write_invoice(inv, hdr, {})[0][0][2] == "2026-01-01"
+    assert m2.parse(text.replace("2026-01-01", "01/01/26"))["invoices"][0]["date"] == "2026-01-01"

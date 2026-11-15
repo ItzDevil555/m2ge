@@ -49,6 +49,10 @@ function modal({ title, body, buttons = [], size = '' }) {
   document.body.append(bg); const f = $('input,select', bg); if (f) f.focus();
   return close;
 }
+const pad2 = n => String(n).padStart(2, '0');
+const fmtDate = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : (iso || ''); };
+const fmtTs = s => { const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}:\d{2})/.exec(s || ''); return m ? `${m[3]}/${m[2]}/${m[1].slice(2)} ${m[4]}` : fmtDate(s); };
+const parseDate = s => { s = String(s || '').trim(); if (!s) return ''; let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s); if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`; m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/.exec(s); if (!m) return null; const y = m[3].length === 2 ? '20' + m[3] : m[3]; const d = new Date(`${y}-${pad2(m[2])}-${pad2(m[1])}T00:00:00`); return isNaN(d) || d.getDate() !== +m[1] ? null : `${y}-${pad2(m[2])}-${pad2(m[1])}`; };
 const fmt = (n, d = 2) => (n ?? 0).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
