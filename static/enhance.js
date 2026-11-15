@@ -161,10 +161,10 @@ window.refreshSplit = debounce(async () => {
 }, 500);
 
 // ---------- dashboard: charts + onboarding
-const PAL = ['#4c8dff', '#14b8a6', '#f59e0b', '#a78bfa', '#f472b6', '#34d399', '#fb7185', '#94a3b8'];
+const PAL = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)', 'var(--c7)', 'var(--c8)'];
 function donut(rows) {
   const tot = rows.reduce((a, r) => a + r[1], 0) || 1, R = 52, C = 2 * Math.PI * R; let off = 0;
-  const arcs = rows.map((r, i) => { const len = C * r[1] / tot, s = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${PAL[i % 8]}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"><title>${esc(r[0])}: ${fmt(r[1])}</title></circle>`; off += len; return s; }).join('');
+  const arcs = rows.map((r, i) => { const len = C * r[1] / tot, s = `<circle r="${R}" cx="70" cy="70" fill="none" style="stroke:${PAL[i % 8]}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"><title>${esc(r[0])}: ${fmt(r[1])}</title></circle>`; off += len; return s; }).join('');
   return h('div', { class: 'row', style: 'gap:18px;flex-wrap:nowrap' }, h('div', { html: `<svg width="140" height="140" viewBox="0 0 140 140">${arcs}<text x="70" y="66" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">Total</text><text x="70" y="84" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">${esc(fmt(tot, 0))}</text></svg>` }),
     h('div', { style: 'flex:1;min-width:0' }, rows.map((r, i) => h('div', { class: 'lgd' }, h('i', { style: `background:${PAL[i % 8]}` }), h('span', {}, r[0]), h('b', {}, Math.round(100 * r[1] / tot) + '%')))));
 }
@@ -188,7 +188,7 @@ function onboardCard(d) {
     [!!store('ob_dens'), 'Pick a density', 'Compact fits more lines on screen', null, 'Toggle density'],
   ];
   const done = S.filter(s => s[0]).length;
-  return h('div', { class: 'card onb' }, h('div', { class: 'row' }, h('b', {}, I('star', 16), ' Getting started'), h('span', { class: 'mut' }, `${done} of ${S.length} done`), h('button', { class: 'btn sm ghost right', title: 'Hide', onclick: () => { store('ob_hide', true); go(); } }, I('x', 14))),
+  return h('div', { class: 'card onb' }, h('div', { class: 'row' }, h('b', {}, 'Getting started'), h('span', { class: 'mut' }, `${done} of ${S.length} done`), h('button', { class: 'btn sm ghost right', title: 'Hide', onclick: () => { store('ob_hide', true); go(); } }, I('x', 14))),
     h('div', { class: 'prog' }, h('i', { style: `width:${100 * done / S.length}%` })),
     h('div', { class: 'steps' }, S.map(([ok, t, sub, href, cta], n) => h('div', { class: 'step' + (ok ? ' ok' : '') }, h('span', { class: 'sn' }, ok ? I('check', 14) : n + 1), h('div', {}, h('b', {}, t), h('div', { class: 'mut' }, sub)), !ok ? h('button', { class: 'btn sm right', onclick: () => href ? location.hash = href : n === 3 ? shortcutsModal() : $('#dens').click() }, cta) : null))));
 }

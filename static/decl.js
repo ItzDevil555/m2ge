@@ -122,7 +122,7 @@ function paintMeta() {
 function issueBar() {
   const er = D.issues.filter(i => i.level === 'error').length, wr = D.issues.filter(i => i.level === 'warning').length;
   return h('div', { id: 'issuebar', class: 'row', style: 'margin-bottom:10px' },
-    h('span', { class: 'pill ' + (er ? '' : 'Generated'), style: er ? 'background:var(--errb);color:var(--err)' : '' }, er ? `${er} error${er > 1 ? 's' : ''}` : '✓ No errors'),
+    h('span', { class: 'pill ' + (er ? '' : 'Generated'), style: er ? 'background:var(--errb);color:var(--err)' : '' }, er ? `${er} error${er > 1 ? 's' : ''}` : 'No errors'),
     wr ? h('span', { class: 'pill Validated' }, wr + ' warnings') : null,
     D.issues.length ? h('button', { class: 'btn sm', onclick: issuesModal }, 'Show validation checklist') : null);
 }
@@ -366,7 +366,7 @@ function previewTab() {
   const file = h('input', { type: 'file', accept: '.txt', style: 'display:none', onchange: async e => {
     const fd = new FormData(); fd.append('file', e.target.files[0]); await saveNow(true);
     const r = await api(`/declarations/${D.decl.id}/diff`, { method: 'POST', body: fd });
-    box.replaceChildren(h('div', { class: 'row', style: 'margin:10px 0' }, r.identical ? h('span', { class: 'pill Generated' }, `✓ Byte-identical to the reference (${r.gen_lines} lines)`) : h('span', { class: 'pill', style: 'background:var(--errb);color:var(--err)' }, `${r.changed} changed lines (reference ${r.ref_lines}, generated ${r.gen_lines})`)),
+    box.replaceChildren(h('div', { class: 'row', style: 'margin:10px 0' }, r.identical ? h('span', { class: 'pill Generated' }, `Byte-identical to the reference (${r.gen_lines} lines)`) : h('span', { class: 'pill', style: 'background:var(--errb);color:var(--err)' }, `${r.changed} changed lines (reference ${r.ref_lines}, generated ${r.gen_lines})`)),
       r.identical ? null : h('div', { class: 'hold', style: 'max-height:260px' }, r.diff.map(d => h('div', { class: 'diffl ' + (d[0] === '+' && !d.startsWith('+++') ? 'a' : d[0] === '-' && !d.startsWith('---') ? 'd' : 'h') }, d))));
   } });
   return h('div', { class: 'card' }, h('div', { class: 'row', style: 'margin-bottom:10px' }, h('b', {}, 'Live M2 text'), h('span', { class: 'mut' }, 'Field-coloured: record type · numbers · text · empty'), h('span', { class: 'right row' }, h('button', { class: 'btn sm', onclick: () => file.click() }, '⇄ Compare with a reference file'), file)), pre, box);

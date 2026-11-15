@@ -1,36 +1,30 @@
 // ======================= Dashboard, list, HS master, settings, audit =======================
-// ---- welcome hero (dashboard)
-function welcomeHero(d) {
+// ---- dashboard header (greeting + primary actions)
+function dashHead() {
   const hr = new Date().getHours(), greet = hr < 5 ? 'Working late' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-  const clean = Math.max(0, Math.round(100 - (d.error_rate || 0)));
-  return h('div', { class: 'welcome' },
-    h('i', { class: 'orbit' }), h('i', { class: 'orbit o2' }),
-    h('div', {}, h('span', { class: 'eyebrow' }, I('clock', 13), today),
-      h('h2', {}, greet + '. Ready to clear some cargo?'),
-      h('p', {}, 'Import an invoice, resolve HS codes against the Dubai master, validate, and generate the M2 text file — all in one flow.'),
-      h('div', { class: 'acts' },
-        h('button', { class: 'btn pri', onclick: async () => { const x = await api('/declarations', { json: {} }); location.hash = '#/declaration/' + x.id; } }, '＋ New Declaration'),
-        h('a', { class: 'btn', href: '#/declarations' }, I('file', 15), 'Open declarations'),
-        h('a', { class: 'btn', href: '#/logistics' }, I('ship', 15), 'UAE Logistics'))),
-    h('div', { class: 'mini' }, h('div', {}, h('b', {}, clean + '%'), h('span', {}, 'Clean rate')), h('div', {}, h('b', {}, (M.hs && M.hs.rows ? M.hs.rows : 0).toLocaleString()), h('span', {}, 'HS codes'))));
+  return h('div', { class: 'dhead' },
+    h('div', {}, h('h2', {}, greet), h('p', { class: 'mut' }, today)),
+    h('div', { class: 'acts' },
+      h('a', { class: 'btn', href: '#/declarations' }, 'Open declarations'),
+      h('button', { class: 'btn pri', onclick: async () => { const x = await api('/declarations', { json: {} }); location.hash = '#/declaration/' + x.id; } }, '＋ New declaration')));
 }
 
 route('', 'Dashboard', async () => {
   await loadMeta();
   const d = await api('/dashboard'); const max = Math.max(1, ...d.per_day.map(x => x.n));
-  const kpi = (v, l, icon, c) => h('div', { class: 'card kpi' }, h('i', { class: 'orb' }), h('div', { class: 'kico' }, I(icon, 20)), h('b', { style: c ? 'color:' + c : '' }, v), h('span', {}, l));
+  const kpi = (v, l, c) => h('div', { class: 'kpi' }, h('span', {}, l), h('b', { style: c ? 'color:' + c : '' }, v));
   const hb = (rows, total) => rows.length ? rows.map(([k, n]) => h('div', { class: 'hbar' }, h('span', { title: k, style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, k), h('i', { style: `width:${Math.max(4, 100 * n / total)}%` }), h('b', {}, n))) : h('p', { class: 'mut' }, 'No data yet.');
   const top = d.top_chapters.reduce((a, b) => Math.max(a, b[1]), 1), ts = d.top_shippers.reduce((a, b) => Math.max(a, b[1]), 1);
-  return h('div', { class: 'grid' }, onboardCard(d),
-    welcomeHero(d),
-    h('div', { class: 'grid g4' }, kpi(d.declarations, 'Declarations', 'file'), kpi(d.lines.toLocaleString(), 'Lines processed', 'list'), kpi(d.generated, 'Files generated', 'down'), kpi(d.error_rate + '%', 'Declarations with errors', 'alert', d.error_rate > 30 ? 'var(--err)' : 'var(--ok)')),
+  return h('div', { class: 'grid' }, dashHead(),
+    h('div', { class: 'kpis' }, kpi(d.declarations, 'Declarations'), kpi(d.lines.toLocaleString(), 'Lines processed'), kpi(d.generated, 'Files generated'), kpi(d.error_rate + '%', 'Declarations with errors', d.error_rate > 30 ? 'var(--err)' : '')),
     h('div', { class: 'grid g2' },
       h('div', { class: 'card' }, h('b', {}, 'Declarations created — last 14 days'), h('div', { class: 'bars', style: 'margin:18px 0 26px' }, d.per_day.map(x => h('div', { style: `height:${Math.max(2, 100 * x.n / max)}%`, title: x.d + ': ' + x.n }, h('span', {}, x.d.slice(3)))))),
       h('div', { class: 'card' }, h('b', {}, 'Top HS chapters (by lines)'), hb(d.top_chapters, top))),
     chartsRow(d),
     h('div', { class: 'grid g2' }, h('div', { class: 'card' }, h('b', {}, 'Top shippers'), hb(d.top_shippers, ts)),
-      h('div', { class: 'card' }, h('b', {}, 'HS master'), h('p', { class: 'mut' }, `${M.hs.rows.toLocaleString()} rows · ${M.hs.distinct_old.toLocaleString()} distinct 8-digit codes. Total declared value ${fmt(d.value)}.`), h('a', { class: 'btn', href: '#/hs' }, 'Browse HS master'))));
+      h('div', { class: 'card' }, h('b', {}, 'HS master'), h('p', { class: 'mut' }, `${M.hs.rows.toLocaleString()} rows · ${M.hs.distinct_old.toLocaleString()} distinct 8-digit codes. Total declared value ${fmt(d.value)}.`), h('a', { class: 'btn', href: '#/hs' }, 'Browse HS master'))),
+    onboardCard(d));
 });
 
 route('declarations', 'Declarations', async () => {

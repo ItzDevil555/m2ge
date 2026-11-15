@@ -30,5 +30,6 @@ Dates show as dd/mm/yy in the UI and reports. The M2 file keeps the sample forma
 ## Layout
 app/ (main.py routes · hs.py master+matching · m2.py parser/writer · importer.py · validate.py · weights.py · reports.py) · static/ (SPA — style.css design system, fx.js motion layer) · tests/ · data/
 
-## UI (v9)
-Redesigned front end: aurora-glass design system (dark default + light), floating sidebar with sliding active pill (collapsible), animated welcome dashboard, spotlight cards, count-up KPIs, animated charts, spring tab indicator, circular theme-switch transition, animated modals/toasts, arrow-key command palette and a global activity bar. All motion lives in `static/fx.js` and respects `prefers-reduced-motion`. No backend changes.
+## UI (v10)
+Minimal redesign of the front end: flat surfaces with hairline borders, a neutral palette with a single accent (used only for focus, the active nav marker, selection and charts), ink-filled primary buttons, underline tabs, a KPI strip instead of icon cards, tabular numerals and monospace for codes. Light and dark themes. Motion is limited to responses to actions (modals, toasts, menus, the activity bar) and respects `prefers-reduced-motion`.
+Files: `static/style.css` (design tokens + components), `static/fx.js` (theme icon, sidebar collapse, overlay exits, palette arrow keys, activity bar). No backend changes.
