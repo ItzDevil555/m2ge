@@ -80,7 +80,7 @@ function sel(kind, key, req) {
   let opts = codesOf(kind);
   if (kind === 'declaration') opts = opts.filter(c => c.parent ? c.parent == reg : c.id == cur);
   const s = h('select', { class: bad ? 'bad' : '', disabled: kind === 'declaration' && !reg, onchange: e => mut(d => { d.header[key] = e.target.value ? +e.target.value : null; if (key === 'regime_id') { const dc = M.codes.find(c => c.id == d.header.declaration_id); if (dc && dc.parent && dc.parent != d.header.regime_id) d.header.declaration_id = null; } }, key === 'regime_id') },
-    h('option', { value: '' }, kind === 'declaration' && !reg ? 'Select regime type first' : 'Select…'), opts.map(c => h('option', { value: c.id, selected: c.id == cur }, c.label + (c.code === '' ? '  — (no code set)' : ''))));
+    h('option', { value: '' }, kind === 'declaration' && !reg ? 'Select regime type first' : 'Select…'), opts.map(c => h('option', { value: c.id, selected: c.id == cur }, c.label)));
   return s;
 }
 function field(label, el, cls = 'c4', req) { return h('label', { class: 'f ' + cls }, h('span', { class: req ? 'req' : '' }, label), el); }

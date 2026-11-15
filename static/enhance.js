@@ -121,7 +121,7 @@ function bulkEditModal() {
     return cur;
   };
   const changes = () => targets().map(t => { const l = D.decl.invoices[t.ii].lines[t.li]; const nv = calc(l[S.field]); return String(nv) !== String(l[S.field] ?? '') ? { t, old: l[S.field], nv } : null; }).filter(Boolean);
-  const prev = () => { const c = changes(); out.replaceChildren(h('b', {}, `${c.length} of ${targets().length} line(s) will change`), c.length ? h('table', { class: 't' }, h('tbody', {}, c.slice(0, 6).map(x => h('tr', {}, h('td', { class: 'mut' }, '#' + (x.t.li + 1)), h('td', {}, String(x.old ?? '').slice(0, 40) || '(empty)'), h('td', {}, I('chevr', 14)), h('td', {}, h('b', {}, String(x.nv).slice(0, 40) || '(empty)')))))) : null); };
+  const prev = () => { const c = changes(); out.replaceChildren(h('b', {}, `${c.length} of ${targets().length} line(s) will change`), c.length ? h('table', { class: 't' }, h('tbody', {}, c.slice(0, 6).map(x => h('tr', {}, h('td', { class: 'mut' }, '#' + (x.t.li + 1)), h('td', {}, String(x.old ?? '').slice(0, 40) || '(empty)'), h('td', {}, I('chevr', 14)), h('td', {}, h('b', {}, String(x.nv).slice(0, 40) || '(empty)')))))) : ''); };
   const draw = () => {
     const needTo = ['set', 'mul', 'add', 'prefix', 'suffix', 'replace'].includes(S.op);
     form.replaceChildren(h('div', { class: 'form' },
